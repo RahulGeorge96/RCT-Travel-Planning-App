@@ -1,0 +1,270 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Destinations</title>
+</head>
+<style>
+    body.dark {
+        background-color: black;
+        color: white;
+    }
+    body.light {
+        background-color: white;
+        color: black;
+    }
+</style>
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const toggleTheme = (theme, setTheme) => {
+            const newTheme = theme === "dark" ? "light" : "dark";
+            setTheme(newTheme);
+            document.body.className = newTheme === "dark" ? "dark" : "light";
+            localStorage.setItem("theme", newTheme);
+        }
+
+        const filteredDestinations = (destinations, countryFilter, budgetFilter, searchQuery) => {
+            return destinations
+                .filter(destination => (!countryFilter || destination.country === countryFilter)
+                    && destination.averageBudget <= budgetFilter
+                    && destination.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+
+        const Filters = ({ countryFilter, setCountryFilter, budgetFilter, setBudgetFilter, searchQuery, setSearchQuery }) => {
+            return (
+                <div>
+                    <select value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
+                        <option value="">All Countries</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Brazil">Brazil</option>
+                        <option value="France">France</option>
+                        <option value="Italy">Italy</option>
+                        <option value="Japan">Japan</option>
+                        <option value="Turkey">Turkey</option>
+                        <option value="USA">USA</option>
+                    </select>
+                    <input
+                        type="range"
+                        min="0"
+                        max="4000"
+                        value={budgetFilter}
+                        onChange={e => setBudgetFilter(e.target.value)}
+                    />
+                    <span>{budgetFilter}</span>
+                    <input
+                        type="text"
+                        placeholder="Search by name"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                    />
+                </div>
+            );
+        }
+
+        const Form = ({ destination, onSubmit, onCancel }) => {
+            const [name, setName] = useState(destination ? destination.name : "");
+            const [country, setCountry] = useState(destination ? destination.country : "");
+            const [description, setDescription] = useState(destination ? destination.description : "");
+            const [profileImg, setProfileImg] = useState(destination ? destination.profileImg : "");
+            const [averageBudget, setAverageBudget] = useState(destination ? destination.averageBudget : "");
+            const [adminFlag, setAdminFlag] = useState(destination ? destination.adminFlag : false);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSubmit({ name, country, description, profileImg, averageBudget, adminFlag });
+            }
+
+            return (
+                <form onSubmit={handleSubmit}>
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Name" required />
+                    <input type="text" value={country} onChange={e => setCountry(e.target.value)} placeholder="Country" required />
+                    <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" required />
+                    <input type="text" value={profileImg} onChange={e => setProfileImg(e.target.value)} placeholder="Profile Image URL" required />
+                    <input type="number" value={averageBudget} onChange={e => setAverageBudget(e.target.value)} placeholder="Average Budget" required />
+                    <label>
+                        Admin Flag:
+                        <input type="checkbox" checked={adminFlag} onChange={e => setAdminFlag(e.target.checked)} />
+                    </label>
+                    <button type="submit">Save</button>
+                    <button type="button" onClick={onCancel}>Cancel</button>
+                </form>
+            );
+        }
+
+        const Card = ({ destination, onEdit }) => {
+            return (
+                <div>
+                    <img style={{ height: "250px", width: "250px" }} src={destination.profileImg} alt={destination.name} />
+                    <h2>{destination.name}</h2>
+                    <h2>{destination.country}</h2>
+                    <h2>{destination.averageBudget}</h2>
+                    {destination.adminFlag && <button onClick={onEdit}>Edit</button>}
+                </div>
+            );
+        }
+
+        const fetchData = (setDestinations) => {
+            axios.get(
+                "https://rct-sprint-1-b38-eval-default-rtdb.asia-southeast1.firebasedatabase.app/destinations.json"
+            ).then((res) => {
+                const dataWithId = Object.keys(res.data).map(key => ({ id: key, ...res.data[key] }));
+                setDestinations(dataWithId);
+            }).catch((error) => {
+                console.log(error);
+            })
+        }
+
+        const App = () => {
+            const [destinations, setDestinations] = useState([]);
+            const initialTheme = localStorage.getItem("theme") || "light";
+            document.body.className = initialTheme === "dark" ? "dark" : "light";
+            const [theme, setTheme] = useState(initialTheme);
+
+            const [countryFilter, setCountryFilter] = useState("");
+            const [budgetFilter, setBudgetFilter] = useState("4000");
+            const [searchQuery, setSearchQuery] = useState("");
+            const [updatingDestination, setUpdatingDestination] = useState(null);
+            const [showForm, setShowForm] = useState(false);
+
+            useEffect(() => {
+                fetchData(setDestinations);
+            }, [])
+
+            const filterDestinations = filteredDestinations(destinations, countryFilter, budgetFilter, searchQuery);
+
+            const handleEdit = (destination) => {
+                setUpdatingDestination(destination);
+                setShowForm(true);
+            }
+
+            const handleFormSubmit = (destination) => {
+                if (updatingDestination) {
+                    // Update existing destination using the Firebase key
+                    axios.put(
+                        `https://rct-sprint-1-b38-eval-default-rtdb.asia-southeast1.firebasedatabase.app/destinations/${updatingDestination.id}.json`,
+                        destination
+                    ).then(() => {
+                        fetchData(setDestinations);
+                    }).catch((error) => {
+                        console.error(error);
+                    });
+                } else {
+                    // Add new destination
+                    axios.post(
+                        "https://rct-sprint-1-b38-eval-default-rtdb.asia-southeast1.firebasedatabase.app/destinations.json",
+                        destination
+                    ).then(() => {
+                        fetchData(setDestinations);
+                    }).catch((error) => {
+                        console.error(error);
+                    });
+                }
+                setShowForm(false);
+                setUpdatingDestination(null);
+            }
+
+            const handleCancel = () => {
+                setShowForm(false);
+                setUpdatingDestination(null);
+            }
+
+            const handleAddNew = () => {
+                setUpdatingDestination(null);  // Reset the form
+                setShowForm(true);
+            }
+
+            return (
+                <>
+                    <div>
+                        <button onClick={() => toggleTheme(theme, setTheme)}>Change Theme {theme === "dark" ? "Light" : "Dark"}</button>
+                    </div>
+                    <div>
+                        <Filters
+                            countryFilter={countryFilter}
+                            setCountryFilter={setCountryFilter}
+                            budgetFilter={budgetFilter}
+                            setBudgetFilter={setBudgetFilter}
+                            searchQuery={searchQuery}
+                            setSearchQuery={setSearchQuery}
+                        />
+                    </div>
+                    <div>
+                        <button onClick={handleAddNew}>Add New Destination</button>
+                    </div>
+                    <div>
+                        {showForm ? (
+                            <Form
+                                destination={updatingDestination}
+                                onSubmit={handleFormSubmit}
+                                onCancel={handleCancel}
+                            />
+                        ) : (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)" }}>
+                                {filterDestinations.map((destination) =>
+                                    <Card
+                                        key={destination.id}
+                                        destination={destination}
+                                        onEdit={() => handleEdit(destination)}
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </>
+            );
+        }
+
+        const reactRoot = ReactDOM.createRoot(document.getElementById("root"));
+        reactRoot.render(<App />)
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
